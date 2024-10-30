@@ -54,6 +54,52 @@ function parseInlineParagraphFormatting(text) {
 
 function htmlToMarkdown(html) {
   const turndownService = new TurndownService();
+
+  turndownService.addRule("imageParser", {
+    filter: "img", // Targeting <img> elements
+    replacement: (content, node) => {
+      const src = node.getAttribute("src") || "";
+      const alt = node.getAttribute("alt") || "";
+      const title = node.getAttribute("title") || "";
+
+      // Custom Markdown formatting for images
+      return `![${alt || `image-${Date.now().toString()}`}](${src}${
+        title ? ` "${title}"` : ""
+      })`;
+    },
+  });
+
+  turndownService.addRule('imageParser', {
+    filter: ['img', 'a'],
+    replacement: function (content, node) {
+      // If this is an anchor tag containing only an image, just return the image markdown
+      if (node.nodeName === 'A' && node.firstChild && node.firstChild.nodeName === 'IMG') {
+        const img = node.firstChild;
+        const src = img.getAttribute("src") || "";
+        const alt = img.getAttribute("alt") || "";
+        const title = img.getAttribute("title") || "";
+
+        return `![${alt || `image-${Date.now().toString()}`}](${src}${
+          title ? ` "${title}"` : ""
+        })`;
+      }
+      
+      // If this is a standalone image
+      if (node.nodeName === 'IMG') {
+        const src = node.getAttribute("src") || "";
+        const alt = node.getAttribute("alt") || "";
+        const title = node.getAttribute("title") || "";
+
+        return `![${alt || `image-${Date.now().toString()}`}](${src}${
+          title ? ` "${title}"` : ""
+        })`;
+      }
+
+      // For regular links, use default behavior
+      return content;
+    }
+  });
+
   return turndownService.turndown(html);
 }
 
@@ -63,7 +109,9 @@ function convertNodesToMarkdown(nodes) {
     switch (node.type) {
       case "heading":
         const headingLevel = "#".repeat(node.level);
-        markdown += `${headingLevel} ${convertNodesToMarkdown(node.children)}\n\n`;
+        markdown += `${headingLevel} ${convertNodesToMarkdown(
+          node.children
+        )}\n\n`;
         break;
       case "paragraph":
         markdown += `${convertNodesToMarkdown(node.children)}\n\n`;
@@ -82,8 +130,8 @@ function convertNodesToMarkdown(nodes) {
         markdown += `[${linkText}](${node.url})`;
         break;
       case "image":
-        const { url: imageUrl, alternativeText: altText = "" } = node.image;
-        markdown += `![${altText}](${imageUrl})\n\n`;
+        const { url, alternativeText = "image" } = node.image;
+        markdown += `![${alternativeText}](${url})\n\n`;
         break;
       case "list":
         const isOrdered = node.format === "ordered";
@@ -98,10 +146,15 @@ function convertNodesToMarkdown(nodes) {
         break;
       case "code":
         const codeLanguage = node.language || "";
-        markdown += `\`\`\`${codeLanguage}\n${convertNodesToMarkdown(node.children)}\n\`\`\`\n\n`;
+        markdown += `\`\`\`${codeLanguage}\n${convertNodesToMarkdown(
+          node.children
+        )}\n\`\`\`\n\n`;
         break;
       case "list-item":
         markdown += `${convertNodesToMarkdown(node.children)}`;
+        break;
+      case "thematicBreak":
+        markdown += "---\n\n";
         break;
       default:
         throw new Error(`Unsupported node type: ${node.type}`);
@@ -120,7 +173,7 @@ function parseMarkdownToJson(markdown) {
       const headingBlock = {
         type: "heading",
         children: [
-          { type: "text", text: entity.text, ...(isBold && { bold: true }) }
+          { type: "text", text: entity.text, ...(isBold && { bold: true }) },
         ],
         level: entity.depth,
       };
@@ -130,11 +183,60 @@ function parseMarkdownToJson(markdown) {
       const children = parseInlineParagraphFormatting(entity.text);
       jsonOutput.push({ type: "paragraph", children });
     },
+    image(entity) {
+      jsonOutput.push({ 
+        type: "image", 
+        image: {
+          url: entity.src || entity.href,
+          alternativeText: entity.text || entity.alt || 'image'
+        } 
+      });
+    },
+    list(entity, ordered) {
+      const items = entity.items.map(item => ({
+        type: "list-item",
+        children: parseInlineParagraphFormatting(item.text || item)
+      }));
+      
+      jsonOutput.push({
+        type: "list",
+        format: ordered ? "ordered" : "unordered",
+        children: items
+      });
+    },
+    hr() {
+      jsonOutput.push({
+        type: "thematicBreak"
+      });
+    },
+    blockquote(entity) {
+      const text = entity.text.replace(/\n/g, ' ').trim();
+      jsonOutput.push({
+        type: "quote",
+        children: parseInlineParagraphFormatting(text)
+      });
+    },
+    code(code, language) {
+      jsonOutput.push({
+        type: "code",
+        language: language || "",
+        children: [{ 
+          type: "text", 
+          text: code.trim() 
+        }]
+      });
+    }
   };
 
-  marked.use({ renderer });
-  marked.parse(markdown);
+  marked.use({ 
+    renderer,
+    gfm: true, // Enable GitHub Flavored Markdown
+    breaks: true, // Enable line breaks
+    pedantic: false,
+    smartLists: true
+  });
 
+  marked.parse(markdown);
   return jsonOutput;
 }
 
@@ -146,7 +248,6 @@ async function fetchWPData(BASE_URL, POSTS_PATH) {
 }
 
 async function importWPData(data) {
-
   const BASE_URL = "http://localhost:1337";
   const PATH = "/api/posts";
   const url = new URL(PATH, BASE_URL).href;
@@ -158,8 +259,10 @@ async function importWPData(data) {
         const json = parseMarkdownToJson(markdown);
         const newContent = convertNodesToMarkdown(json);
 
-        console.log("content to send");
-        console.dir(newContent, { depth: null });
+        // console.log("content to send");
+        console.log("##########################");
+        console.log(markdown);
+        console.log("##########################");
 
         const strapiData = {
           title: entity.title.rendered,
@@ -167,6 +270,13 @@ async function importWPData(data) {
           content: newContent,
           blocksContent: json,
         };
+
+        // console.log("##########################");
+        // console.dir(json, { depth: null });
+        // console.log("##########################");
+
+        // console.log("strapi data to send");
+        // console.dir(strapiData, { depth: null });
 
         const data = await fetch(url, {
           method: "POST",
@@ -179,7 +289,7 @@ async function importWPData(data) {
         })
 
         const post = await data.json();
-        console.dir(post, { depth: null });
+        // console.dir(post, { depth: null });
       })
     );
   } catch (error) {
@@ -194,5 +304,5 @@ export {
   htmlToMarkdown,
   convertNodesToMarkdown,
   parseMarkdownToJson,
-  importWPData
+  importWPData,
 };

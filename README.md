@@ -1,1 +1,0 @@
-# wm-migration-example-script

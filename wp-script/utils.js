@@ -89,7 +89,6 @@ async function htmlToMarkdown(html) {
   
   // Then process all images in the markdown
   const processedMarkdown = await processMarkdownImages(markdown);
-  
   return processedMarkdown;
 }
 
@@ -115,13 +114,11 @@ async function processMarkdownImages(markdown) {
         const originalName = src.split('/').pop();
         const formattedName = originalName.replace(/-/g, '_');
 
-        // console.log("############### fuck ##########"); 
-        // console.log("formattedName", formattedName);
-        // console.log("############ me #############"); 
         return {
           fullMatch,
           replacement: `![${formattedName}](${uploadedImageUrl}${title ? ` "${title}"` : ""})`
         };
+
       } catch (error) {
         console.error('Failed to upload image:', error);
         return { fullMatch, replacement: fullMatch };
@@ -140,89 +137,6 @@ async function processMarkdownImages(markdown) {
   });
 
   return result;
-}
-
-function convertNodesToMarkdown(nodes) {
-  console.log("############### nodes ##########"); 
-  console.dir(nodes, { depth: null });
-  console.log("############ me #############"); 
-  // Handle non-array input
-  if (!nodes) return '';
-  if (!Array.isArray(nodes)) {
-    // If single node object is passed
-    if (typeof nodes === 'object') {
-      nodes = [nodes];
-    } else {
-      return String(nodes);
-    }
-  }
-
-  let markdown = "";
-  nodes.forEach((node) => {
-    // Skip invalid nodes
-    if (!node || !node.type) {
-      console.warn('Invalid node encountered:', node);
-      return;
-    }
-
-    switch (node.type) {
-      case "heading":
-        const headingLevel = "#".repeat(node.level);
-        markdown += `${headingLevel} ${convertNodesToMarkdown(
-          node.children
-        )}\n\n`;
-        break;
-      case "paragraph":
-        markdown += `${convertNodesToMarkdown(node.children)}\n\n`;
-        break;
-      case "text":
-        let text = node.text;
-        if (node.bold) text = `**${text}**`;
-        if (node.italic) text = `*${text}*`;
-        if (node.underline) text = `<u>${text}</u>`;
-        if (node.strikethrough) text = `~~${text}~~`;
-        if (node.code) text = `\`${text}\``;
-        markdown += text;
-        break;
-      case "link":
-        const linkText = convertNodesToMarkdown(node.children);
-        markdown += `[${linkText}](${node.url})`;
-        break;
-      case "image":
-        const { url, alternativeText = "image" } = node.image;
-        markdown += `![${alternativeText}](${url})\n\n`;
-        break;
-      case "list":
-        const isOrdered = node.format === "ordered";
-        node.children.forEach((item, index) => {
-          const prefix = isOrdered ? `${index + 1}. ` : "- ";
-          markdown += `${prefix}${convertNodesToMarkdown(item.children)}\n`;
-        });
-        markdown += "\n";
-        break;
-      case "quote":
-        markdown += `> ${convertNodesToMarkdown(node.children)}\n\n`;
-        break;
-      case "code":
-        const codeLanguage = node.language || "";
-        markdown += `\`\`\`${codeLanguage}\n${convertNodesToMarkdown(
-          node.children
-        )}\n\`\`\`\n\n`;
-        break;
-      case "list-item":
-        markdown += `${convertNodesToMarkdown(node.children)}`;
-        break;
-      case "thematicBreak":
-        markdown += "---\n\n";
-        break;
-      default:
-        console.warn(`Unsupported node type: ${node.type}`, node);
-        // Instead of throwing, we'll skip invalid nodes
-        return;
-    }
-  });
-
-  return markdown.trim();
 }
 
 async function parseMarkdownToJson(markdown) {
@@ -314,6 +228,89 @@ async function parseMarkdownToJson(markdown) {
   
   await marked.parse(markdown);
   return jsonOutput;
+}
+
+function convertNodesToMarkdown(nodes) {
+  console.log("############### nodes ##########"); 
+  console.dir(nodes, { depth: null });
+  console.log("############ me #############"); 
+  // Handle non-array input
+  if (!nodes) return '';
+  if (!Array.isArray(nodes)) {
+    // If single node object is passed
+    if (typeof nodes === 'object') {
+      nodes = [nodes];
+    } else {
+      return String(nodes);
+    }
+  }
+
+  let markdown = "";
+  nodes.forEach((node) => {
+    // Skip invalid nodes
+    if (!node || !node.type) {
+      console.warn('Invalid node encountered:', node);
+      return;
+    }
+
+    switch (node.type) {
+      case "heading":
+        const headingLevel = "#".repeat(node.level);
+        markdown += `${headingLevel} ${convertNodesToMarkdown(
+          node.children
+        )}\n\n`;
+        break;
+      case "paragraph":
+        markdown += `${convertNodesToMarkdown(node.children)}\n\n`;
+        break;
+      case "text":
+        let text = node.text;
+        if (node.bold) text = `**${text}**`;
+        if (node.italic) text = `*${text}*`;
+        if (node.underline) text = `<u>${text}</u>`;
+        if (node.strikethrough) text = `~~${text}~~`;
+        if (node.code) text = `\`${text}\``;
+        markdown += text;
+        break;
+      case "link":
+        const linkText = convertNodesToMarkdown(node.children);
+        markdown += `[${linkText}](${node.url})`;
+        break;
+      case "image":
+        const { url, alternativeText = "image" } = node.image;
+        markdown += `![${alternativeText}](${url})\n\n`;
+        break;
+      case "list":
+        const isOrdered = node.format === "ordered";
+        node.children.forEach((item, index) => {
+          const prefix = isOrdered ? `${index + 1}. ` : "- ";
+          markdown += `${prefix}${convertNodesToMarkdown(item.children)}\n`;
+        });
+        markdown += "\n";
+        break;
+      case "quote":
+        markdown += `> ${convertNodesToMarkdown(node.children)}\n\n`;
+        break;
+      case "code":
+        const codeLanguage = node.language || "";
+        markdown += `\`\`\`${codeLanguage}\n${convertNodesToMarkdown(
+          node.children
+        )}\n\`\`\`\n\n`;
+        break;
+      case "list-item":
+        markdown += `${convertNodesToMarkdown(node.children)}`;
+        break;
+      case "thematicBreak":
+        markdown += "---\n\n";
+        break;
+      default:
+        console.warn(`Unsupported node type: ${node.type}`, node);
+        // Instead of throwing, we'll skip invalid nodes
+        return;
+    }
+  });
+
+  return markdown.trim();
 }
 
 async function fetchWPData(BASE_URL, POSTS_PATH) {

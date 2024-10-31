@@ -2,11 +2,11 @@
   "name": "wp-script",
   "version": "1.0.0",
   "description": "Wordpress to Strapi Migration Script",
-  "main": "script.ts",
+  "main": "app.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "migrate": "node script.js"
+    "migrate": "node app.js"
   },
   "author": "Paul Bratslavsky",
   "license": "MIT",
